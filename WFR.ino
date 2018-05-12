@@ -25,7 +25,7 @@
 #include <Time.h>
 
 // 0 - simple, 1 - advanced
-#define INTERFACE_TYPE 1
+#define INTERFACE_TYPE main
 
 ADC_MODE(ADC_VCC);
 
