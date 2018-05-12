@@ -1,0 +1,464 @@
+/*
+ * @author: Polyakov Konstantin
+ * 
+ * NTP-серверы:
+ *   time.nist.gov
+ *   pool.ntp.org
+ * https://github.com/gmag11/NtpClient/blob/master/examples/NTPClientESP8266/NTPClientESP8266.ino
+ * https://ru.wikipedia.org/wiki/NTP
+ * https://esp8266.ru/forum/threads/sinxronizacija-chasov.1951/page-2
+ * 
+ * 74HC595 - http://arduino.ru/Tutorial/registr_74HC595
+ */
+
+
+
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <EEPROM.h>
+//#include "FS.h"
+#include <DNSServer.h>
+#include <WFRChannels.h>
+#include <ArduinoJson.h>
+
+#include <DS1307RTC.h>
+#include <Time.h>
+
+// 0 - simple, 1 - advanced
+#define INTERFACE_TYPE 1
+
+ADC_MODE(ADC_VCC);
+
+WFRChannels wfr_channels;
+ESP8266WebServer webServer(80);
+DNSServer dnsServer;
+
+byte pin_btn_reset = 16;
+
+const byte pin_i2c_sda = 4;
+const byte pin_i2c_scl = 5;
+
+// shift registr (example - 74hc595)
+const byte pin_shiftr_clock = 13;
+const byte pin_shiftr_latch = 12;
+const byte pin_shiftr_data = 14;
+
+// состояния каналов реле мы не храним в структуре, а отдельно,
+// чтобы при каждом изменении сотсояния не трогать настройки.
+struct DefaultSettings {
+    byte wifi_mode = 0; // 0 - точка доступа, 1 - клиент, 2 - оба варианта одновременно
+
+    char ssidAP[32] = "WiFi_Relay";
+    char passwordAP[32] = "1234567890";
+    //byte use_passwordAP = 0;
+
+    char ssid[32] = "Your name";
+    char password[32] = "Your password";
+
+    // 4096 - 200
+    char bt_panel[3896] = "[{\"name\":\"Кабинет\",\"children\":[{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"6\"},{\"type\":\"group\",\"name\":\"Настольный свет\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"0\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"1\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"2\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"3\"},{\"type\":\"button\",\"name\":\"нижний\",\"ch_name\":\"4\"}]}]},{\"name\":\"Кухня\",\"children\":[{\"type\":\"group\",\"name\":\"Газовая плита\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"7\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"8\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"9\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"10\"},{\"type\":\"button\",\"name\":\"Духовка\",\"ch_name\":\"11\"}]},{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"12\"},{\"type\":\"button\",\"name\":\"Вытяжка\",\"ch_name\":\"13\"}]}]";
+
+};
+
+// eeprom addresses
+const unsigned int ee_addr_start_firstrun = 0;
+const unsigned int ee_addr_start_channels = 1;
+const unsigned int ee_addr_start_settings = 5;
+//const unsigned int ee_addr_start_bt_panel = ee_addr_start_settings + sizeof(DefaultSettings);
+
+const byte code_firstrun = 18;
+
+struct WFRStatistic {
+    float vcc = 0;
+    String time_s = "00";
+    String time_m = "00";
+    String time_h = "00";
+    String rtc_s = "00";
+    String rtc_m = "00";
+    String rtc_h = "00";
+    String rtc_day = "00";
+    String rtc_month = "00";
+    String rtc_year = "0000";
+    String rtc_is = "false";
+};
+
+DefaultSettings ee_data;
+WFRStatistic stat;
+
+byte is_wifi_client_connected = 0;
+
+void statistic_update(void) {
+
+    // время работы
+  
+    unsigned long t = millis()/1000;
+    byte h = t/3600;
+    byte m = (t-h*3600)/60;
+    unsigned int s = (t-h*3600-m*60);
+
+    stat.time_h = (h>9?"":"0") + String(h, DEC);
+    stat.time_m = (m>9?"":"0") + String(m, DEC);
+    stat.time_s = (s>9?"":"0") + String(s, DEC);
+
+    // напряжение
+
+    stat.vcc = ((float)(ESP.getVcc()))/1000;
+
+    // текущее время
+
+    TimeElements te;
+    time_t timeVal = makeTime(te);
+    //RTC.set(timeVal);
+    setTime(timeVal);
+
+    setSyncProvider(RTC.get);   // получаем время с RTC
+    if (timeStatus() == timeSet)
+        stat.rtc_is = "true";
+    else stat.rtc_is = "false";
+
+    byte _h = hour();
+    byte _m = minute();
+    byte _s = second();
+    byte _day = day();
+    byte _month = month();
+    int _year = year();
+    stat.rtc_h = (_h>9?"":"0") + String(_h, DEC);
+    stat.rtc_m = (_m>9?"":"0") + String(_m, DEC);
+    stat.rtc_s = (_s>9?"":"0") +  String(_s, DEC);
+    stat.rtc_day = (_day>9?"":"0") + String(_day, DEC);
+    stat.rtc_month = (_month>9?"":"0") + String(_month, DEC);
+    stat.rtc_year = String((_year>999?"":"0")) + String((_year>99?"":"0")) + String((_year>9?"":"0")) + String(_year, DEC);
+}
+
+void notFoundHandler() {
+    webServer.send(404, "text/html", "<h1>Not found :-(</h1>");
+}
+
+void apiHandler() {
+
+    String action = webServer.arg("action");
+
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& answer = jsonBuffer.createObject();
+    answer["success"] = 1;
+    answer["message"] = "Успешно!";
+    JsonObject& data = answer.createNestedObject("data");
+
+    if (action == "gpio") {
+
+        int channel = webServer.arg("channel").toInt();
+        int value = webServer.arg("value").toInt();
+        wfr_channels.write(channel, value);
+
+        value = wfr_channels.read(channel);
+        data["value"] = value;
+
+        if (value == 1) answer["message"] = "Канал " +String(channel+1, DEC)+ " включён!";
+        else answer["message"] = "Канал " +String(channel+1, DEC)+ " выключен!";
+
+    } else if (action == "led") {
+          
+        byte value = webServer.arg("value").toInt();
+        digitalWrite(2, value==1?0:1);
+
+        value = digitalRead(2)==1?0:1;
+        data["value"] = value;
+
+        if (value == 1) answer["message"] = "LED включён!";
+        else answer["message"] = "LED выключен!";
+            
+    } else if (action == "settings_mode") {
+
+        String mode = webServer.arg("wifi_mode");
+        if (mode.toInt() > 2 ||mode.toInt() < 0) mode = "0";
+        ee_data.wifi_mode = mode.toInt();
+
+        EEPROM.put(ee_addr_start_settings, ee_data);
+        EEPROM.commit();
+
+        data["value"] = ee_data.wifi_mode;
+        answer["message"] = "Сохранено!";
+
+    } else if (action == "settings") {
+
+        String _ssid = webServer.arg("ssidAP");
+        String _password = webServer.arg("passwordAP");
+        String _ssidAP = webServer.arg("ssid");
+        String _passwordAP = webServer.arg("password");
+        _ssid.toCharArray(ee_data.ssidAP, sizeof(ee_data.ssidAP));
+        _password.toCharArray(ee_data.passwordAP, sizeof(ee_data.passwordAP));
+        _ssidAP.toCharArray(ee_data.ssid, sizeof(ee_data.ssid));
+        _passwordAP.toCharArray(ee_data.password, sizeof(ee_data.password));
+
+        EEPROM.put(ee_addr_start_settings, ee_data);
+        EEPROM.commit();
+
+        answer["message"] = "Сохранено!";
+
+    } else if (action == "settings_time") {
+
+        String _date = webServer.arg("date");
+        String _time = webServer.arg("time");
+        String source = webServer.arg("source");
+
+        if (source == "ntp") {
+        } else if (source == "hand" || source == "browser") {
+
+            //setSyncProvider(RTC.get);   // получаем время с RTC
+            //if (timeStatus() != timeSet)
+            //    Serial.println("Unable to sync with the RTC"); //синхронизация не удаласть
+            //else
+            //    Serial.println("RTC has set the system time");
+            TimeElements te;
+            te.Second = source=="browser" ? webServer.arg("seconds").toInt() : 0;
+            te.Minute = _time.substring(3, 5).toInt();
+            te.Hour = _time.substring(0, 2).toInt();
+            te.Day = _date.substring(8, 10).toInt();
+            te.Month = _date.substring(5, 7).toInt();
+            te.Year = _date.substring(0, 4).toInt() - 1970; //год в библиотеке отсчитывается с 1970
+            time_t timeVal = makeTime(te);
+            RTC.set(timeVal);
+            setTime(timeVal);
+        }
+
+        answer["message"] = "Время обновлено!";
+
+    } else if (action == "get_data") {
+
+        data["gpio_std"] = wfr_channels.read_all();
+        data["gpio_led"] = digitalRead(2)==1?0:1;
+        data["bt_panel"] = ee_data.bt_panel;
+
+        JsonObject& _settings = data.createNestedObject("settings");
+        _settings["wifi_mode"] = ee_data.wifi_mode;
+        _settings["password"] = ee_data.password;
+        _settings["ssidAP"] = ee_data.ssidAP;
+        _settings["passwordAP"] = ee_data.passwordAP;
+        _settings["ssid"] = ee_data.ssid;
+
+        JsonObject& _stat = data.createNestedObject("stat");
+        statistic_update();
+        _stat["vcc"] = stat.vcc;
+        _stat["time_h"] = stat.time_h;
+        _stat["time_m"] = stat.time_m;
+        _stat["time_s"] = stat.time_s;
+
+        _stat["rtc_h"] = stat.rtc_h;
+        _stat["rtc_m"] = stat.rtc_m;
+        _stat["rtc_s"] = stat.rtc_s;
+        _stat["rtc_day"] = stat.rtc_day;
+        _stat["rtc_month"] = stat.rtc_month;
+        _stat["rtc_year"] = stat.rtc_year;
+        _stat["rtc_is"] = stat.rtc_is;
+        //data.parseObject();
+        //JsonObject& _settings = settings.parseObject(ee_data);
+
+        answer["message"] = "Информация на странице обновлена";
+
+    } else if (action == "bt_panel_save") {
+
+        webServer.arg("bt_panel").toCharArray(ee_data.bt_panel, sizeof(ee_data.bt_panel));
+
+        EEPROM.put(ee_addr_start_settings, ee_data);
+        EEPROM.commit();
+
+        //bt_panel = webServer.arg("bt_panel");
+        //webServer.arg("bt_panel").toCharArray(bt_panel, sizeof(bt_panel));
+        //EEPROM.put(ee_addr_start_bt_panel, bt_panel);
+
+        answer["message"] = "Панель сохранена";
+
+    } else if (action == "settings_reboot") {
+        restart();
+    } else if (action == "settings_reset") {
+        reset_settings();
+    }
+
+    #if INTERFACE_TYPE == 0
+
+    #elif INTERFACE_TYPE == 1
+
+    #endif
+
+    String sAnswer;
+    answer.printTo(sAnswer);
+    webServer.send(200, "text/html", sAnswer);
+}
+
+void restart() {
+    EEPROM.get(ee_addr_start_settings, ee_data);
+    WiFi.disconnect(true);
+    WiFi.softAPdisconnect(true);
+    ESP.restart();
+}
+
+void reset_settings() {
+
+    // мигаем светодиодом
+    byte y = 0;
+    for(byte x = 0; x < 10; x++) {
+        //if (y==1) {y=0;} else {y=1;}
+        digitalWrite(2, y);
+        delay(250);
+    }
+
+    EEPROM.write(ee_addr_start_firstrun, 0);
+    EEPROM.commit();
+    
+    restart();
+
+}
+
+/*
+ * argument byte address - 7 bit, without RW bit.
+ * argument int value - for PCF8575 - two bytes (for ports P00-P07 and P10-P17)
+ */
+/*void _i2c_channel_write(byte address, byte value[]) {
+  Wire.beginTransmission(address);
+  Wire.write(value, 2);
+  Wire.endTransmission();
+}*/
+
+byte wfr_wifiClient_start(byte trying_count) {
+    WiFi.begin(ee_data.ssid, ee_data.password);
+
+    byte x = 0;
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+        x += 1;
+        if (x == trying_count) break;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) return 0;
+    else return 1;
+}
+
+void setup() {
+
+    /* Первичная инициализация */
+  
+    Serial.begin(115200);
+    delay(10);
+    EEPROM.begin(4096);//EEPROM.begin(ee_addr_start_settings+sizeof(ee_data));
+    delay(10);
+    pinMode(pin_btn_reset, INPUT);
+    pinMode(2, OUTPUT); digitalWrite(2, LOW);
+//EEPROM.put(ee_addr_start_firstrun, 1); EEPROM.commit(); return;
+    Serial.println();
+    wfr_channels.init(pin_shiftr_clock, pin_shiftr_latch, pin_shiftr_data, ee_addr_start_channels);
+    Serial.println();
+
+    //Wire.begin(pin_i2c_sda, pin_i2c_scl);
+
+    pinMode(pin_btn_reset, INPUT);
+    attachInterrupt(pin_btn_reset, reset_settings, RISING);
+
+    /* Инициализация настроек */
+
+    if (EEPROM.read(ee_addr_start_firstrun) != code_firstrun) { // Устанавливаем настройки по умолчанию (если изделие запущено первый раз или настройки быв сброшены пользователем)
+        EEPROM.put(ee_addr_start_settings, ee_data);
+        EEPROM.put(ee_addr_start_channels, 0);
+        EEPROM.write(ee_addr_start_firstrun, code_firstrun); // при презапуске устройства код в этих скобках уже не выполнится, если вновь не сбросить натсройки
+        EEPROM.commit();
+    }
+
+    EEPROM.get(ee_addr_start_settings, ee_data);
+
+    /* подготовка к запуску wifi */
+
+    Serial.println("");
+    byte _wifi_mode = ee_data.wifi_mode; // Не трогаем исходное значение
+
+    /* WiFi как клиент */
+
+    if (_wifi_mode == 1 || _wifi_mode == 2) {
+
+        /*WiFi.begin(ee_data.ssid, ee_data.password);
+
+        byte x = 0;
+        while (WiFi.status() != WL_CONNECTED) {
+            delay(500);
+            Serial.print(".");
+            x += 1;
+            if (x == 20) break;
+        }*/
+
+        is_wifi_client_connected = wfr_wifiClient_start(20);
+    
+        if (is_wifi_client_connected == 1) {
+            Serial.println("WiFi connected");
+            Serial.print("Client IP: ");
+            Serial.println(WiFi.localIP());
+        } else { // если не подключились в качестве клиента, то запускаемся в качестве точки доступа
+            WiFi.disconnect(true);
+            _wifi_mode = 0;
+        }
+
+    }
+
+    /* WiFi как точка доступа */
+
+    if (_wifi_mode == 0 || _wifi_mode == 2) {
+
+        WiFi.softAP(ee_data.ssidAP, ee_data.passwordAP);
+      
+        Serial.println("AP started");
+        Serial.print("AP IP address: ");
+        Serial.println(WiFi.softAPIP());
+
+        dnsServer.start(53, "*", IPAddress(192, 168, 4, 1));
+
+    }
+
+    /* Запускаем веб-сервер */
+
+    webServer.on("/", HTTP_GET, handler_index_html);
+    webServer.on("/api.c", HTTP_POST, apiHandler);
+    set_handlers();
+
+    webServer.onNotFound(notFoundHandler);
+    webServer.begin();
+    //server.begin();
+    Serial.println("Server started");
+}
+
+void loop() {
+
+    dnsServer.processNextRequest();
+    webServer.handleClient();
+
+    if (digitalRead(pin_btn_reset)==1) reset_settings();
+
+    // если мы не смогли подключиться к сети при старте - пробуем ещё
+    if (is_wifi_client_connected == 0 && (ee_data.wifi_mode == 1 || ee_data.wifi_mode == 2)) {
+        is_wifi_client_connected = wfr_wifiClient_start(8);
+        // если мы подключились к сети, но точку доступа включать не планировали, то выключим её
+        if (is_wifi_client_connected == 1 && ee_data.wifi_mode == 1) {
+            WiFi.softAPdisconnect();
+        }
+    }
+
+    //digitalWrite(2, LOW);
+    //delay(250);
+    //digitalWrite(2, HIGH);
+    //delay(250);
+
+    /*} else if (api_group == "gpio_i2c") {
+
+        int num = -1, val = -1;
+        if (api_name != "") num = api_name.toInt();
+        if (api_value != "") val = api_value.toInt();
+
+        if (num != -1 && val != -1) { // Set GPIO
+            byte _val[] = {val, val >> 8};
+            _i2c_channel_write(num, _val);
+            answer_code = "OK";
+        } else {
+            answer_code = "NO";
+        }
+
+        answer_data = String(num) +String(" - ")+ String(val);
+        print_output_answer(client, answer_code, answer_data);*/
+}
+
