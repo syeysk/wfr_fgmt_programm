@@ -49,11 +49,13 @@ struct DefaultSettings {
     byte wifi_mode = 0; // 0 - точка доступа, 1 - клиент, 2 - оба варианта одновременно
 
     char ssidAP[32] = "WiFi_Relay";
-    char passwordAP[32] = "1234567890";
+    char passwordAP[32] = "";
     //byte use_passwordAP = 0;
 
     char ssid[32] = "Your name";
     char password[32] = "Your password";
+
+    char device_name[64] = "Device name";
 
     // 4096 - 200
     char bt_panel[3896] = "[{\"name\":\"Кабинет\",\"children\":[{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"6\"},{\"type\":\"group\",\"name\":\"Настольный свет\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"0\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"1\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"2\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"3\"},{\"type\":\"button\",\"name\":\"нижний\",\"ch_name\":\"4\"}]}]},{\"name\":\"Кухня\",\"children\":[{\"type\":\"group\",\"name\":\"Газовая плита\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"7\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"8\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"9\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"10\"},{\"type\":\"button\",\"name\":\"Духовка\",\"ch_name\":\"11\"}]},{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"12\"},{\"type\":\"button\",\"name\":\"Вытяжка\",\"ch_name\":\"13\"}]}]";
@@ -179,6 +181,16 @@ void apiHandler() {
         data["value"] = ee_data.wifi_mode;
         answer["message"] = "Сохранено!";
 
+    } else if (action == "settings_device_name") {
+
+        String _device_name = webServer.arg("device_name");
+        _device_name.toCharArray(ee_data.device_name, sizeof(ee_data.device_name));
+
+        EEPROM.put(ee_addr_start_settings, ee_data);
+        EEPROM.commit();
+
+        answer["message"] = "Сохранено!";
+
     } else if (action == "settings") {
 
         String _ssid = webServer.arg("ssidAP");
@@ -235,6 +247,7 @@ void apiHandler() {
         _settings["ssidAP"] = ee_data.ssidAP;
         _settings["passwordAP"] = ee_data.passwordAP;
         _settings["ssid"] = ee_data.ssid;
+        _settings["device_name"] = ee_data.device_name;
 
         JsonObject& _stat = data.createNestedObject("stat");
         statistic_update();
@@ -272,6 +285,9 @@ void apiHandler() {
         restart();
     } else if (action == "settings_reset") {
         reset_settings();
+    } else {
+        answer["success"] = 0;
+        answer["message"] = "неверный API";
     }
 
     #if INTERFACE_TYPE == 0
