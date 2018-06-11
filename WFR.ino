@@ -33,7 +33,7 @@ WFRChannels wfr_channels;
 ESP8266WebServer webServer(80);
 DNSServer dnsServer;
 
-byte pin_btn_reset = 16;
+byte pin_btn_reset = 14;
 
 const byte pin_i2c_sda = 4;
 const byte pin_i2c_scl = 5;
@@ -41,7 +41,7 @@ const byte pin_i2c_scl = 5;
 // shift registr (example - 74hc595)
 const byte pin_shiftr_clock = 13;
 const byte pin_shiftr_latch = 12;
-const byte pin_shiftr_data = 14;
+const byte pin_shiftr_data = 16;
 
 // состояния каналов реле мы не храним в структуре, а отдельно,
 // чтобы при каждом изменении сотсояния не трогать настройки.
@@ -104,7 +104,7 @@ void statistic_update(void) {
 
     // напряжение
 
-    stat.vcc = ((float)(ESP.getVcc()))/1000;
+    stat.vcc = ((float)(ESP.getVcc()))/1000 - 0.19;
 
     // текущее время
 
@@ -313,7 +313,7 @@ void reset_settings() {
     // мигаем светодиодом
     byte y = 0;
     for(byte x = 0; x < 10; x++) {
-        //if (y==1) {y=0;} else {y=1;}
+        y = ~y;
         digitalWrite(2, y);
         delay(250);
     }
@@ -323,6 +323,16 @@ void reset_settings() {
     
     restart();
 
+}
+
+// сброс настроек по нажатию на кнопку
+void reset_settings_btn() {
+    for(byte x = 0; x < 50; x++) {
+        delay(100);
+        if (digitalRead(pin_btn_reset)==0) return;
+    }
+    // Настройки сбросятся только если кнопка была зажата в тнчение 5-ти секунд
+    reset_settings();
 }
 
 /*
@@ -368,7 +378,7 @@ void setup() {
     //Wire.begin(pin_i2c_sda, pin_i2c_scl);
 
     pinMode(pin_btn_reset, INPUT);
-    attachInterrupt(pin_btn_reset, reset_settings, RISING);
+    attachInterrupt(pin_btn_reset, reset_settings_btn, RISING);
 
     /* Инициализация настроек */
 
@@ -444,7 +454,7 @@ void loop() {
     dnsServer.processNextRequest();
     webServer.handleClient();
 
-    if (digitalRead(pin_btn_reset)==1) reset_settings();
+    //if (digitalRead(pin_btn_reset)==1) reset_settings();
 
     // если мы не смогли подключиться к сети при старте - пробуем ещё
     if (is_wifi_client_connected == 0 && (ee_data.wifi_mode == 1 || ee_data.wifi_mode == 2)) {
