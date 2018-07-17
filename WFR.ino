@@ -16,6 +16,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
+#include <Ticker.h>
 //#include "FS.h"
 #include <DNSServer.h>
 #include <WFRChannels.h>
@@ -32,6 +33,8 @@ ADC_MODE(ADC_VCC);
 WFRChannels wfr_channels;
 ESP8266WebServer webServer(80);
 DNSServer dnsServer;
+
+Ticker schedule;
 
 byte pin_btn_reset = 14;
 
@@ -114,8 +117,8 @@ void statistic_update(void) {
     setTime(timeVal);
 
     setSyncProvider(RTC.get);   // получаем время с RTC
-    if (timeStatus() == timeSet)
-        stat.rtc_is = "true";
+    if (timeStatus() != timeSet) setSyncProvider(RTC.get);
+    if (timeStatus() == timeSet) stat.rtc_is = "true";
     else stat.rtc_is = "false";
 
     byte _h = hour();
@@ -136,6 +139,10 @@ void notFoundHandler() {
     webServer.send(404, "text/html", "<h1>Not found :-(</h1>");
 }
 
+void Timer_channel_write(int data) {
+    wfr_channels.write(data>>8, data & 255);
+}
+
 void apiHandler() {
 
     String action = webServer.arg("action");
@@ -150,7 +157,20 @@ void apiHandler() {
 
         int channel = webServer.arg("channel").toInt();
         int value = webServer.arg("value").toInt();
-        wfr_channels.write(channel, value);
+        int sec_timer = webServer.arg("timer").toInt();
+        int sec_delay_press = webServer.arg("delay_press").toInt();
+
+        if (sec_timer != 0) {
+            int cur_value = wfr_channels.read(channel);
+            Ticker timer;
+            timer.once(sec_timer + sec_delay_press , Timer_channel_write, channel<<8 + cur_value);
+        }
+        if (sec_delay_press != 0) {
+            Ticker delay_press;
+            delay_press.once(sec_delay_press, Timer_channel_write, channel<<8 + value);
+        } else {
+            wfr_channels.write(channel, value);
+        }
 
         value = wfr_channels.read(channel);
         data["value"] = value;
@@ -360,6 +380,42 @@ byte wfr_wifiClient_start(byte trying_count) {
     else return 1;
 }
 
+int scheduleList[2][7] = {{-1, -1, -1, -1, -1, 5, 0}, {-1, -1, -1, -1, -1, 10, 1}};
+
+void scheduleRunner(void) {
+
+    TimeElements te;
+    time_t timeVal = makeTime(te);
+    //RTC.set(timeVal);
+    setTime(timeVal);
+    
+    setSyncProvider(RTC.get);   // получаем время с RTC
+    if (timeStatus() != timeSet) setSyncProvider(RTC.get);
+
+    byte _h = hour();
+    byte _m = minute();
+    byte _s = second();
+    byte _day = day();
+    byte _month = month();
+    int _year = year();
+
+    int do_task;
+
+    for (int i = 0; i < 2; i++) {
+        do_task = 0;
+        if (scheduleList[i][0] == _year) do_task = 1;
+        if (scheduleList[i][1] == _month) do_task = 1;
+        if (scheduleList[i][2] == _day) do_task = 1;
+        if (scheduleList[i][3] == _h) do_task = 1;
+        if (scheduleList[i][4] == _m) do_task = 1;
+        if (scheduleList[i][5] == _s) do_task = 1;
+
+        if (do_task == 1) {
+            digitalWrite(2, !(scheduleList[i][6]));
+        }
+    }
+}
+
 void setup() {
 
     /* Первичная инициализация */
@@ -447,6 +503,10 @@ void setup() {
     webServer.begin();
     //server.begin();
     Serial.println("Server started");
+
+    /* запускаем выполнение расписания */
+
+    schedule.attach(0.4, scheduleRunner);
 }
 
 void loop() {
