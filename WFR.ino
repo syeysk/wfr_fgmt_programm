@@ -27,6 +27,7 @@
 
 // 0 - simple, 1 - advanced
 #define INTERFACE_TYPE main
+#define COUNT_OUTLETS 3
 
 ADC_MODE(ADC_VCC);
 
@@ -143,6 +144,8 @@ void Timer_channel_write(int data) {
     wfr_channels.write(data>>8, data & 255);
 }
 
+Ticker delay_press;
+Ticker timer;
 void apiHandler() {
 
     String action = webServer.arg("action");
@@ -162,12 +165,10 @@ void apiHandler() {
 
         if (sec_timer != 0) {
             int cur_value = wfr_channels.read(channel);
-            Ticker timer;
-            timer.once(sec_timer + sec_delay_press , Timer_channel_write, channel<<8 + cur_value);
+            timer.once(sec_timer + sec_delay_press, Timer_channel_write, (channel<<8) + cur_value);
         }
         if (sec_delay_press != 0) {
-            Ticker delay_press;
-            delay_press.once(sec_delay_press, Timer_channel_write, channel<<8 + value);
+            delay_press.once(sec_delay_press, Timer_channel_write, (channel<<8) + value);
         } else {
             wfr_channels.write(channel, value);
         }
@@ -260,6 +261,7 @@ void apiHandler() {
         data["gpio_std"] = wfr_channels.read_all();
         data["gpio_led"] = digitalRead(2)==1?0:1;
         data["bt_panel"] = ee_data.bt_panel;
+        data["count_outlets"] = COUNT_OUTLETS;
 
         JsonObject& _settings = data.createNestedObject("settings");
         _settings["wifi_mode"] = ee_data.wifi_mode;
