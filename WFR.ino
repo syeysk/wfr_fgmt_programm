@@ -61,8 +61,10 @@ struct DefaultSettings {
 
     char device_name[64] = "Device name";
 
+    unsigned int update_time = 2000;
+
     // 4096 - 200
-    char bt_panel[3896] = "[{\"name\":\"Кабинет\",\"children\":[{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"6\"},{\"type\":\"group\",\"name\":\"Настольный свет\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"0\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"1\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"2\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"3\"},{\"type\":\"button\",\"name\":\"нижний\",\"ch_name\":\"4\"}]}]},{\"name\":\"Кухня\",\"children\":[{\"type\":\"group\",\"name\":\"Газовая плита\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"7\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"8\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"9\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"10\"},{\"type\":\"button\",\"name\":\"Духовка\",\"ch_name\":\"11\"}]},{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"12\"},{\"type\":\"button\",\"name\":\"Вытяжка\",\"ch_name\":\"13\"}]}]";
+    char bt_panel[3384] = "[{\"name\":\"Кабинет\",\"children\":[{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"6\"},{\"type\":\"group\",\"name\":\"Настольный свет\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"0\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"1\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"2\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"3\"},{\"type\":\"button\",\"name\":\"нижний\",\"ch_name\":\"4\"}]}]},{\"name\":\"Кухня\",\"children\":[{\"type\":\"group\",\"name\":\"Газовая плита\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"7\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"8\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"9\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"10\"},{\"type\":\"button\",\"name\":\"Духовка\",\"ch_name\":\"11\"}]},{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"12\"},{\"type\":\"button\",\"name\":\"Вытяжка\",\"ch_name\":\"13\"}]}]";
 
 };
 
@@ -72,7 +74,7 @@ const unsigned int ee_addr_start_channels = 1;
 const unsigned int ee_addr_start_settings = 5;
 //const unsigned int ee_addr_start_bt_panel = ee_addr_start_settings + sizeof(DefaultSettings);
 
-const byte code_firstrun = 18;
+const byte code_firstrun = 2;
 
 struct WFRStatistic {
     float vcc = 0;
@@ -212,6 +214,16 @@ void apiHandler() {
 
         answer["message"] = "Сохранено!";
 
+    } else if (action == "settings_other") {
+
+        String _update_time = webServer.arg("update_time");
+        ee_data.update_time = _update_time.toInt();
+
+        EEPROM.put(ee_addr_start_settings, ee_data);
+        EEPROM.commit();
+
+        answer["message"] = "Сохранено!";
+
     } else if (action == "settings") {
 
         String _ssid = webServer.arg("ssidAP");
@@ -262,8 +274,6 @@ void apiHandler() {
 
         if (data_type == "std" || data_type == "all") {
 
-            data["gpio_std"] = wfr_channels.read_all();
-            data["gpio_led"] = digitalRead(2)==1?0:1;
             data["count_outlets"] = COUNT_OUTLETS;
 
             JsonObject& _stat = data.createNestedObject("stat");
@@ -284,11 +294,20 @@ void apiHandler() {
             //JsonObject& _settings = settings.parseObject(ee_data);
 
         }
+        
         if (data_type == "btn" || data_type == "all") {
 
             data["bt_panel"] = ee_data.bt_panel;
 
         }
+
+        if (data_type == "btn" || data_type == "std" || data_type == "all") {
+
+            data["gpio_std"] = wfr_channels.read_all();
+            data["gpio_led"] = digitalRead(2)==1?0:1;
+            
+        }
+
         if (data_type == "set" || data_type == "all") {
 
             JsonObject& _settings = data.createNestedObject("settings");
@@ -298,6 +317,7 @@ void apiHandler() {
             _settings["passwordAP"] = ee_data.passwordAP;
             _settings["ssid"] = ee_data.ssid;
             _settings["device_name"] = ee_data.device_name;
+            _settings["update_time"] = ee_data.update_time;
 
             JsonObject& _stat = data.createNestedObject("stat");
             statistic_update();
@@ -311,6 +331,7 @@ void apiHandler() {
             _stat["rtc_is"] = stat.rtc_is;
 
         }
+        data["update_time"] = ee_data.update_time; // для того, чтобы изменение этого значения сразу вступили в силу
 
         answer["message"] = "Информация на странице обновлена";
 
