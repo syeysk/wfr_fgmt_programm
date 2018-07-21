@@ -258,35 +258,59 @@ void apiHandler() {
 
     } else if (action == "get_data") {
 
-        data["gpio_std"] = wfr_channels.read_all();
-        data["gpio_led"] = digitalRead(2)==1?0:1;
-        data["bt_panel"] = ee_data.bt_panel;
-        data["count_outlets"] = COUNT_OUTLETS;
+        String data_type = webServer.arg("data_type");
 
-        JsonObject& _settings = data.createNestedObject("settings");
-        _settings["wifi_mode"] = ee_data.wifi_mode;
-        _settings["password"] = ee_data.password;
-        _settings["ssidAP"] = ee_data.ssidAP;
-        _settings["passwordAP"] = ee_data.passwordAP;
-        _settings["ssid"] = ee_data.ssid;
-        _settings["device_name"] = ee_data.device_name;
+        if (data_type == "std" || data_type == "all") {
 
-        JsonObject& _stat = data.createNestedObject("stat");
-        statistic_update();
-        _stat["vcc"] = stat.vcc;
-        _stat["time_h"] = stat.time_h;
-        _stat["time_m"] = stat.time_m;
-        _stat["time_s"] = stat.time_s;
+            data["gpio_std"] = wfr_channels.read_all();
+            data["gpio_led"] = digitalRead(2)==1?0:1;
+            data["count_outlets"] = COUNT_OUTLETS;
 
-        _stat["rtc_h"] = stat.rtc_h;
-        _stat["rtc_m"] = stat.rtc_m;
-        _stat["rtc_s"] = stat.rtc_s;
-        _stat["rtc_day"] = stat.rtc_day;
-        _stat["rtc_month"] = stat.rtc_month;
-        _stat["rtc_year"] = stat.rtc_year;
-        _stat["rtc_is"] = stat.rtc_is;
-        //data.parseObject();
-        //JsonObject& _settings = settings.parseObject(ee_data);
+            JsonObject& _stat = data.createNestedObject("stat");
+            statistic_update();
+            _stat["vcc"] = stat.vcc;
+            _stat["time_h"] = stat.time_h;
+            _stat["time_m"] = stat.time_m;
+            _stat["time_s"] = stat.time_s;
+
+            _stat["rtc_h"] = stat.rtc_h;
+            _stat["rtc_m"] = stat.rtc_m;
+            _stat["rtc_s"] = stat.rtc_s;
+            _stat["rtc_day"] = stat.rtc_day;
+            _stat["rtc_month"] = stat.rtc_month;
+            _stat["rtc_year"] = stat.rtc_year;
+            _stat["rtc_is"] = stat.rtc_is;
+            //data.parseObject();
+            //JsonObject& _settings = settings.parseObject(ee_data);
+
+        }
+        if (data_type == "btn" || data_type == "all") {
+
+            data["bt_panel"] = ee_data.bt_panel;
+
+        }
+        if (data_type == "set" || data_type == "all") {
+
+            JsonObject& _settings = data.createNestedObject("settings");
+            _settings["wifi_mode"] = ee_data.wifi_mode;
+            _settings["password"] = ee_data.password;
+            _settings["ssidAP"] = ee_data.ssidAP;
+            _settings["passwordAP"] = ee_data.passwordAP;
+            _settings["ssid"] = ee_data.ssid;
+            _settings["device_name"] = ee_data.device_name;
+
+            JsonObject& _stat = data.createNestedObject("stat");
+            statistic_update();
+
+            _stat["rtc_h"] = stat.rtc_h;
+            _stat["rtc_m"] = stat.rtc_m;
+            _stat["rtc_s"] = stat.rtc_s;
+            _stat["rtc_day"] = stat.rtc_day;
+            _stat["rtc_month"] = stat.rtc_month;
+            _stat["rtc_year"] = stat.rtc_year;
+            _stat["rtc_is"] = stat.rtc_is;
+
+        }
 
         answer["message"] = "Информация на странице обновлена";
 
