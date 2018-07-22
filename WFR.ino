@@ -47,6 +47,42 @@ const byte pin_shiftr_clock = 13;
 const byte pin_shiftr_latch = 12;
 const byte pin_shiftr_data = 16;
 
+Ticker t_gpio0;
+Ticker t_gpio1;
+Ticker t_gpio2;
+Ticker t_gpio3;
+Ticker t_gpio4;
+Ticker t_gpio5;
+Ticker t_gpio6;
+Ticker t_gpio7;
+Ticker t_gpio8;
+Ticker t_gpio9;
+Ticker t_gpio10;
+Ticker t_gpio11;
+Ticker t_gpio12;
+Ticker t_gpio13;
+Ticker t_gpio14;
+Ticker t_gpio15;
+Ticker timers[16] = {t_gpio0, t_gpio1, t_gpio2, t_gpio3, t_gpio4, t_gpio5, t_gpio6, t_gpio7, t_gpio8, t_gpio9, t_gpio10, t_gpio11, t_gpio12, t_gpio13, t_gpio14, t_gpio15};
+Ticker d_gpio0;
+Ticker d_gpio1;
+Ticker d_gpio2;
+Ticker d_gpio3;
+Ticker d_gpio4;
+Ticker d_gpio5;
+Ticker d_gpio6;
+Ticker d_gpio7;
+Ticker d_gpio8;
+Ticker d_gpio9;
+Ticker d_gpio10;
+Ticker d_gpio11;
+Ticker d_gpio12;
+Ticker d_gpio13;
+Ticker d_gpio14;
+Ticker d_gpio15;
+Ticker delay_press[16] = {d_gpio0, d_gpio1, d_gpio2, d_gpio3, d_gpio4, d_gpio5, d_gpio6, d_gpio7, d_gpio8, d_gpio9, d_gpio10, d_gpio11, d_gpio12, d_gpio13, d_gpio14, d_gpio15};
+
+
 // состояния каналов реле мы не храним в структуре, а отдельно,
 // чтобы при каждом изменении сотсояния не трогать настройки.
 struct DefaultSettings {
@@ -146,8 +182,8 @@ void Timer_channel_write(int data) {
     wfr_channels.write(data>>8, data & 255);
 }
 
-Ticker delay_press;
-Ticker timer;
+//Ticker delay_press;
+//Ticker timer;
 void apiHandler() {
 
     String action = webServer.arg("action");
@@ -160,6 +196,8 @@ void apiHandler() {
 
     if (action == "gpio") {
 
+        String msg_d, msg_t;
+
         int channel = webServer.arg("channel").toInt();
         int value = webServer.arg("value").toInt();
         int sec_timer = webServer.arg("timer").toInt();
@@ -167,10 +205,12 @@ void apiHandler() {
 
         if (sec_timer != 0) {
             int cur_value = wfr_channels.read(channel);
-            timer.once(sec_timer + sec_delay_press, Timer_channel_write, (channel<<8) + cur_value);
+            timers[channel].once(sec_timer + sec_delay_press, Timer_channel_write, (channel<<8) + cur_value);
+            msg_t = "через "+ String(sec_timer, DEC) +" сек.";
         }
         if (sec_delay_press != 0) {
-            delay_press.once(sec_delay_press, Timer_channel_write, (channel<<8) + value);
+            msg_d = " через "+ String(sec_delay_press, DEC) +" сек. будет";
+            delay_press[channel].once(sec_delay_press, Timer_channel_write, (channel<<8) + value);
         } else {
             wfr_channels.write(channel, value);
         }
@@ -178,8 +218,13 @@ void apiHandler() {
         value = wfr_channels.read(channel);
         data["value"] = value;
 
-        if (value == 1) answer["message"] = "Канал " +String(channel+1, DEC)+ " включён!";
-        else answer["message"] = "Канал " +String(channel+1, DEC)+ " выключен!";
+        if (value == 1) {
+          if (sec_timer != 0) msg_t = " Включится " + msg_t;
+          answer["message"] = "Канал " +String(channel+1, DEC)+ msg_d + " включён!" + msg_t;
+        } else {
+          if (sec_timer != 0) msg_t = " Выключится " + msg_t;
+          answer["message"] = "Канал " +String(channel+1, DEC)+ msg_d + " выключен!" + msg_t;
+        }
 
     } else if (action == "led") {
           
