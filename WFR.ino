@@ -28,6 +28,7 @@
 // 0 - simple, 1 - advanced
 #define INTERFACE_TYPE main
 #define COUNT_OUTLETS 3
+#define BT_PANEL_SIZE 3384
 
 ADC_MODE(ADC_VCC);
 
@@ -100,7 +101,7 @@ struct DefaultSettings {
     unsigned int update_time = 2000;
 
     // 4096 - 200
-    char bt_panel[3384] = "[{\"name\":\"Кабинет\",\"children\":[{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"6\"},{\"type\":\"group\",\"name\":\"Настольный свет\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"0\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"1\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"2\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"3\"},{\"type\":\"button\",\"name\":\"нижний\",\"ch_name\":\"4\"}]}]},{\"name\":\"Кухня\",\"children\":[{\"type\":\"group\",\"name\":\"Газовая плита\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"7\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"8\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"9\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"10\"},{\"type\":\"button\",\"name\":\"Духовка\",\"ch_name\":\"11\"}]},{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"12\"},{\"type\":\"button\",\"name\":\"Вытяжка\",\"ch_name\":\"13\"}]}]";
+    char bt_panel[BT_PANEL_SIZE] = "[{\"name\":\"Кабинет\",\"children\":[{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"6\"},{\"type\":\"group\",\"name\":\"Настольный свет\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"0\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"1\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"2\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"3\"},{\"type\":\"button\",\"name\":\"нижний\",\"ch_name\":\"4\"}]}]},{\"name\":\"Кухня\",\"children\":[{\"type\":\"group\",\"name\":\"Газовая плита\",\"children\":[{\"type\":\"button\",\"name\":\"1\",\"ch_name\":\"7\"},{\"type\":\"button\",\"name\":\"2\",\"ch_name\":\"8\"},{\"type\":\"button\",\"name\":\"3\",\"ch_name\":\"9\"},{\"type\":\"button\",\"name\":\"4\",\"ch_name\":\"10\"},{\"type\":\"button\",\"name\":\"Духовка\",\"ch_name\":\"11\"}]},{\"type\":\"button\",\"name\":\"Главный свет\",\"ch_name\":\"12\"},{\"type\":\"button\",\"name\":\"Вытяжка\",\"ch_name\":\"13\"}]}]";
     // [{"name":"Кабинет","children":[{"type":"button","name":"Главный свет","ch_name":"6"},{"type":"group","name":"Настольный свет","children":[{"type":"button","name":"1","ch_name":"0"},{"type":"button","name":"2","ch_name":"1"},{"type":"button","name":"3","ch_name":"2"},{"type":"button","name":"4","ch_name":"3"},{"type":"button","name":"нижний","ch_name":"4"}]}]},{"name":"Кухня","children":[{"type":"group","name":"Газовая плита","children":[{"type":"button","name":"1","ch_name":"7"},{"type":"button","name":"2","ch_name":"8"},{"type":"button","name":"3","ch_name":"9"},{"type":"button","name":"4","ch_name":"10"},{"type":"button","name":"Духовка","ch_name":"11"}]},{"type":"button","name":"Главный свет","ch_name":"12"},{"type":"button","name":"Вытяжка","ch_name":"13"}]}]
 };
 
@@ -343,6 +344,7 @@ void apiHandler() {
         if (data_type == "btn" || data_type == "all") {
 
             data["bt_panel"] = ee_data.bt_panel;
+            data["max_size"] = BT_PANEL_SIZE;
 
         }
 
