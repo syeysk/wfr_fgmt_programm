@@ -12,6 +12,8 @@
  */
 
 
+#define LANG_RU 1
+//#define LANG_EN 1
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -26,7 +28,6 @@
 #include <Time.h>
 
 // 0 - simple, 1 - advanced
-#define INTERFACE_TYPE main
 #define COUNT_OUTLETS 3
 #define BT_PANEL_SIZE 3384
 
@@ -192,7 +193,11 @@ void apiHandler() {
     DynamicJsonBuffer jsonBuffer;
     JsonObject& answer = jsonBuffer.createObject();
     answer["success"] = 1;
-    answer["message"] = "Успешно!";
+    #if defined(LANG_RU)
+        answer["message"] = "Успешно!";
+    #elif defined(LANG_EN)
+         answer["message"] = "Success!";
+    #endif
     JsonObject& data = answer.createNestedObject("data");
 
     if (action == "gpio") {
@@ -235,8 +240,19 @@ void apiHandler() {
         value = digitalRead(2)==1?0:1;
         data["value"] = value;
 
-        if (value == 1) answer["message"] = "LED включён!";
-        else answer["message"] = "LED выключен!";
+        if (value == 1) {
+            #if defined(LANG_RU)
+                answer["message"] = "LED включён!";
+            #elif defined(LANG_EN)
+               answer["message"] = "LED on!";
+            #endif
+        } else {
+            #if defined(LANG_RU)
+                answer["message"] = "LED выключён!";
+            #elif defined(LANG_EN)
+               answer["message"] = "LED off!";
+            #endif
+        }
             
     } else if (action == "settings_mode") {
 
@@ -248,7 +264,11 @@ void apiHandler() {
         EEPROM.commit();
 
         data["value"] = ee_data.wifi_mode;
-        answer["message"] = "Сохранено!";
+        #if defined(LANG_RU)
+            answer["message"] = "Сохранено!";
+        #elif defined(LANG_EN)
+           answer["message"] = "Saved!";
+        #endif
 
     } else if (action == "settings_device_name") {
 
@@ -258,7 +278,11 @@ void apiHandler() {
         EEPROM.put(ee_addr_start_settings, ee_data);
         EEPROM.commit();
 
-        answer["message"] = "Сохранено!";
+        #if defined(LANG_RU)
+            answer["message"] = "Сохранено!";
+        #elif defined(LANG_EN)
+           answer["message"] = "Saved!";
+        #endif
 
     } else if (action == "settings_other") {
 
@@ -268,7 +292,11 @@ void apiHandler() {
         EEPROM.put(ee_addr_start_settings, ee_data);
         EEPROM.commit();
 
-        answer["message"] = "Сохранено!";
+        #if defined(LANG_RU)
+            answer["message"] = "Сохранено!";
+        #elif defined(LANG_EN)
+           answer["message"] = "Saved!";
+        #endif
 
     } else if (action == "settings") {
 
@@ -284,7 +312,11 @@ void apiHandler() {
         EEPROM.put(ee_addr_start_settings, ee_data);
         EEPROM.commit();
 
-        answer["message"] = "Сохранено!";
+        #if defined(LANG_RU)
+            answer["message"] = "Сохранено!";
+        #elif defined(LANG_EN)
+           answer["message"] = "Saved!";
+        #endif
 
     } else if (action == "settings_time") {
 
@@ -312,7 +344,11 @@ void apiHandler() {
             setTime(timeVal);
         }
 
-        answer["message"] = "Время обновлено!";
+        #if defined(LANG_RU)
+            answer["message"] = "Время обновлено!";
+        #elif defined(LANG_EN)
+           answer["message"] = "Time was updated!";
+        #endif
 
     } else if (action == "get_data") {
 
@@ -380,7 +416,11 @@ void apiHandler() {
         }
         data["update_time"] = ee_data.update_time; // для того, чтобы изменение этого значения сразу вступили в силу
 
-        answer["message"] = "Информация на странице обновлена";
+        #if defined(LANG_RU)
+            answer["message"] = "Информация на странице обновлена!";
+        #elif defined(LANG_EN)
+           answer["message"] = "Page was updated!";
+        #endif
 
     } else if (action == "bt_panel_save") {
 
@@ -393,7 +433,11 @@ void apiHandler() {
         //webServer.arg("bt_panel").toCharArray(bt_panel, sizeof(bt_panel));
         //EEPROM.put(ee_addr_start_bt_panel, bt_panel);
 
-        answer["message"] = "Панель сохранена";
+        #if defined(LANG_RU)
+            answer["message"] = "Панель сохранена!";
+        #elif defined(LANG_EN)
+           answer["message"] = "The panel has been saved!";
+        #endif
 
     } else if (action == "settings_reboot") {
         restart();
@@ -401,15 +445,12 @@ void apiHandler() {
         reset_settings();
     } else {
         answer["success"] = 0;
-        answer["message"] = "неверный API";
+        #if defined(LANG_RU)
+            answer["message"] = "неверный API!";
+        #elif defined(LANG_EN)
+           answer["message"] = "Unknown API!";
+        #endif
     }
-
-    #if INTERFACE_TYPE == 0
-
-    #elif INTERFACE_TYPE == 1
-
-    #endif
-
     String sAnswer;
     answer.printTo(sAnswer);
     webServer.send(200, "text/html", sAnswer);
