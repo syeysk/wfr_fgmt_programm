@@ -12,8 +12,9 @@
  */
 
 
-#define LANG_RU 1
-//#define LANG_EN 1
+//#define LANG_RU 1
+#define LANG_EN 1
+#define DEVICE_TYPE "wfr"
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -28,7 +29,7 @@
 #include <Time.h>
 
 // 0 - simple, 1 - advanced
-#define COUNT_OUTLETS 3
+#define COUNT_OUTLETS 3 // количество розеток
 #define BT_PANEL_SIZE 3384
 
 ADC_MODE(ADC_VCC);
@@ -415,6 +416,7 @@ void apiHandler() {
 
         }
         data["update_time"] = ee_data.update_time; // для того, чтобы изменение этого значения сразу вступили в силу
+        data["device_type"] = DEVICE_TYPE;
 
         #if defined(LANG_RU)
             answer["message"] = "Информация на странице обновлена!";
