@@ -91,7 +91,7 @@ Ticker delay_press[16] = {d_gpio0, d_gpio1, d_gpio2, d_gpio3, d_gpio4, d_gpio5, 
 struct DefaultSettings {
     byte wifi_mode = 0; // 0 - точка доступа, 1 - клиент, 2 - оба варианта одновременно
 
-    char ssidAP[32] = "WiFi_Relay";
+    char ssidAP[32] = "SYeysk_WFR";
     char passwordAP[32] = "";
     //byte use_passwordAP = 0;
 
